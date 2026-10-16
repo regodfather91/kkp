@@ -57,7 +57,7 @@
     id: 'vn.nuvio.kkphim.streams',
     version: '1.0.0',
     name: 'KKPhim',
-    description: 'Addon lấy nguồn phim chuẩn TMDB ID từ KKPhim. Chuẩn Mùa/Tập, đầy đủ Vietsub, Thuyết Minh, Lồng Tiếng.',
+    description: 'Addon nguồn phim chuẩn TMDB ID từ KKPhim. Đầy đủ Vietsub, Thuyết Minh, Lồng Tiếng.',
     logo: 'https://raw.githubusercontent.com/regodfather91/kkp/main/logo.png',
     resources: ['stream'],
     types: ['movie', 'series'],
