@@ -53,9 +53,9 @@
 
   const MANIFEST = {
     id: 'vn.nuvio.kkphim.streams',
-    version: '1.3.0',
-    name: 'KKPhim Streams (Vietsub • Thuyết Minh • Lồng Tiếng)',
-    description: 'Addon lấy nguồn phim chuẩn TMDB ID từ KKPhim (phimapi.com) cho Cinemeta Catalog mặc định trên Nuvio. Chuẩn Season/Tập, đầy đủ Vietsub, Thuyết Minh, Lồng Tiếng.',
+    version: '1.0.0',
+    name: 'KKPhim Streams',
+    description: 'Addon lấy nguồn phim chuẩn TMDB ID từ KKPhim. Chuẩn Season/Tập, đầy đủ Vietsub, Thuyết Minh, Lồng Tiếng.',
     logo: 'https://kkphim.com/favicon.ico',
     resources: ['stream'],
     types: ['movie', 'series'],
