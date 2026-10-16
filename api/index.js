@@ -36,7 +36,7 @@
         method: 'GET',
         headers: {
           'Accept': 'application/json',
-          'User-Agent': 'Nuvio-KKPhim-Addon/1.2'
+          'User-Agent': 'Nuvio-KKPhim-Addon/1.3'
         },
         signal: controller.signal
       });
@@ -53,7 +53,7 @@
 
   const MANIFEST = {
     id: 'vn.nuvio.kkphim.streams',
-    version: '1.2.1',
+    version: '1.3.0',
     name: 'KKPhim Streams (Vietsub • Thuyết Minh • Lồng Tiếng)',
     description: 'Addon lấy nguồn phim chuẩn TMDB ID từ KKPhim (phimapi.com) cho Cinemeta Catalog mặc định trên Nuvio. Chuẩn Season/Tập, đầy đủ Vietsub, Thuyết Minh, Lồng Tiếng.',
     logo: 'https://kkphim.com/favicon.ico',
@@ -100,7 +100,6 @@
       title: null,
       originalTitle: null,
       year: null,
-      genres: [],
       absoluteEpisode: null
     };
 
@@ -119,9 +118,6 @@
           result.year = parseInt(String(meta.year).slice(0, 4), 10);
         } else if (meta.releaseInfo) {
           result.year = parseInt(String(meta.releaseInfo).slice(0, 4), 10);
-        }
-        if (Array.isArray(meta.genres)) {
-          result.genres = meta.genres;
         }
 
         if (type === 'series' && Array.isArray(meta.videos) && parsedId.season && parsedId.episode) {
@@ -190,6 +186,47 @@
       .trim();
   }
 
+  function toSlug(str) {
+    return normalizeText(str).replace(/\s+/g, '-');
+  }
+
+  // Làm sạch tên phim (loại bỏ năm phát hành trong ngoặc như "Mai (2024)" và hậu tố Phần/Season) để so khớp chính xác
+  function cleanTitleForMatch(rawTitle, yearToStrip = null) {
+    let cleaned = String(rawTitle || '')
+      // Bỏ năm trong ngoặc đơn hoặc ngoặc vuông: (2024), [2024]
+      .replace(/[\(\[\{]\s*(?:19|20)\d{2}\s*[\)\]\}]/g, ' ')
+      // Bỏ hậu tố Phần / Season trong ngoặc
+      .replace(/[\(\[\{]\s*(?:phần|phan|season|ss|mùa|mua|part)\s*\d+\s*[\)\]\}]/gi, ' ');
+
+    let norm = normalizeText(cleaned)
+      .replace(/\b(?:phan|season|ss|mua|part)\s*0*\d+\b/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (yearToStrip) {
+      const yearRegex = new RegExp(`\\b${yearToStrip}$`);
+      const stripped = norm.replace(yearRegex, '').trim();
+      if (stripped.length > 0) {
+        norm = stripped;
+      }
+    }
+
+    return norm;
+  }
+
+  // Trích xuất năm phát hành nếu bị gắn trong tên hoặc slug (ví dụ: "Mai (2024)" -> 2024, "mai-2024" -> 2024)
+  function extractYearFromItem(item) {
+    if (item && item.year && !Number.isNaN(parseInt(item.year, 10))) {
+      return parseInt(item.year, 10);
+    }
+    const combined = `${item?.name || ''} ${item?.origin_name || ''} ${item?.slug || ''}`;
+    const match = combined.match(/(?:[\(\[\-\s])((?:19|20)\d{2})(?:[\)\]\s]|$)/);
+    if (match && match[1]) {
+      return parseInt(match[1], 10);
+    }
+    return null;
+  }
+
   function extractSeasonFromTitleOrSlug(name, originName, slug) {
     const combined = `${normalizeText(name)} | ${normalizeText(originName)} | ${String(slug || '').toLowerCase()}`;
     const patterns = [
@@ -239,7 +276,7 @@
 
     if (requestedType === 'movie') {
       if (kkTmdbType === 'movie') return true;
-      if (kkType === 'single') return true;
+      if (kkType === 'single' || kkType === 'chieurap') return true;
       if (kkType === 'hoathinh' && (!movieObj.tmdb || !movieObj.tmdb.season)) return true;
       return false;
     }
@@ -251,6 +288,37 @@
     }
 
     return true;
+  }
+
+  function isTitleAndYearMatch(item, meta, requestedType, targetSeason) {
+    if (!isTypeCompatible(item, requestedType)) return false;
+
+    const itemYear = extractYearFromItem(item);
+    const refYear = meta.year || itemYear;
+
+    const targetTitles = [
+      cleanTitleForMatch(meta.originalTitle, refYear),
+      cleanTitleForMatch(meta.title, refYear)
+    ].filter(Boolean);
+
+    if (targetTitles.length === 0) return false;
+
+    const itemTitles = [
+      cleanTitleForMatch(item.origin_name, refYear),
+      cleanTitleForMatch(item.name, refYear)
+    ].filter(Boolean);
+
+    const isExactTitle = itemTitles.some(t => targetTitles.includes(t));
+    if (!isExactTitle) return false;
+
+    if (requestedType === 'movie') {
+      if (meta.year && itemYear && Math.abs(itemYear - meta.year) > 1) {
+        return false;
+      }
+      return true;
+    }
+
+    return isSeasonMatch(item, targetSeason);
   }
 
   function extractMoviePayload(apiResponse) {
@@ -272,6 +340,7 @@
     const candidateSlugs = new Set();
     let fallbackSingleSeasonPayload = null;
 
+    // BƯỚC 1: Tra cứu trực tiếp qua Endpoint TMDB của KKPhim (/tmdb/{type}/{id})
     if (meta.tmdbId) {
       const directUrl = `${KKPHIM_BASE}/tmdb/${meta.tmdbType}/${meta.tmdbId}`;
       const directRes = await fetchJson(directUrl);
@@ -306,6 +375,7 @@
       }
     }
 
+    // BƯỚC 2: Tra cứu trực tiếp qua Endpoint IMDb của KKPhim (/imdb/title/{id})
     if (candidateSlugs.size === 0 && meta.imdbId) {
       const imdbUrl = `${KKPHIM_BASE}/imdb/title/${meta.imdbId}`;
       const imdbRes = await fetchJson(imdbUrl);
@@ -325,15 +395,24 @@
       }
     }
 
+    // BƯỚC 3: Tìm kiếm thông minh qua /v1/api/tim-kiem (Xử lý cả tên có kèm năm như "Mai (2024)" và phim tách nhiều Season)
     if (candidateSlugs.size === 0) {
       const searchKeywords = [];
-      if (meta.originalTitle) {
-        const cleanOrigin = meta.originalTitle.replace(/\s*\((?:Phần|Season)\s*\d+\)/i, '').trim();
-        searchKeywords.push(cleanOrigin);
+      const baseOrigin = meta.originalTitle
+        ? meta.originalTitle.replace(/\s*\((?:Phần|Season|\d{4})\s*\d*\)/gi, '').trim()
+        : '';
+      const baseTitle = (meta.title && meta.title !== meta.originalTitle)
+        ? meta.title.replace(/\s*\((?:Phần|Season|\d{4})\s*\d*\)/gi, '').trim()
+        : '';
+
+      // Với phim lẻ có tên ngắn (như "Mai"), ưu tiên tìm kèm năm ("Mai 2024") trước để không bị trôi kết quả
+      if (type === 'movie' && baseOrigin && meta.year && baseOrigin.length <= 12) {
+        searchKeywords.push(`${baseOrigin} ${meta.year}`);
       }
-      if (meta.title && meta.title !== meta.originalTitle) {
-        const cleanTitle = meta.title.replace(/\s*\((?:Phần|Season)\s*\d+\)/i, '').trim();
-        searchKeywords.push(cleanTitle);
+      if (baseOrigin) searchKeywords.push(baseOrigin);
+      if (baseTitle) searchKeywords.push(baseTitle);
+      if (type === 'movie' && baseOrigin && meta.year && baseOrigin.length > 12) {
+        searchKeywords.push(`${baseOrigin} ${meta.year}`);
       }
 
       for (const kw of searchKeywords) {
@@ -344,6 +423,7 @@
 
         if (!Array.isArray(items) || items.length === 0) continue;
 
+        // Ưu tiên 1: Khớp chính xác TMDB ID và Season
         for (const item of items) {
           const itemTmdbId = (item && item.tmdb && item.tmdb.id) ? String(item.tmdb.id) : null;
           if (meta.tmdbId && itemTmdbId === String(meta.tmdbId)) {
@@ -358,20 +438,10 @@
 
         if (candidateSlugs.size > 0) break;
 
-        const normOrigin = normalizeText(meta.originalTitle);
+        // Ưu tiên 2: Khớp tên phim (đã lọc bỏ "(2024)" trong origin_name/name của KKPhim) + Năm phát hành / Season
         for (const item of items) {
-          if (!isTypeCompatible(item, type)) continue;
-          const itemOrigin = normalizeText(item.origin_name)
-            .replace(/\b(?:phan|season|ss)\s*0*\d+\b/g, '')
-            .trim();
-
-          const isExactName = normOrigin && itemOrigin === normOrigin;
-          const isYearClose = !meta.year || !item.year || Math.abs(Number(item.year) - Number(meta.year)) <= 1;
-
-          if (isExactName && (type === 'series' || isYearClose)) {
-            if (type === 'movie' || isSeasonMatch(item, targetSeason)) {
-              if (item.slug) candidateSlugs.add(item.slug);
-            }
+          if (isTitleAndYearMatch(item, meta, type, targetSeason)) {
+            if (item.slug) candidateSlugs.add(item.slug);
           }
         }
 
@@ -379,6 +449,38 @@
       }
     }
 
+    // BƯỚC 4: Truy vấn trực tiếp theo Slug chuẩn của KKPhim (VD: /phim/mai-2024 hoặc /phim/mai) nếu API tìm kiếm chưa trả về
+    if (candidateSlugs.size === 0 && (meta.originalTitle || meta.title)) {
+      const baseSlug = toSlug(cleanTitleForMatch(meta.originalTitle || meta.title, meta.year));
+      const directSlugsToTry = [];
+
+      if (baseSlug) {
+        if (type === 'movie') {
+          if (meta.year) directSlugsToTry.push(`${baseSlug}-${meta.year}`);
+          directSlugsToTry.push(baseSlug);
+        } else if (type === 'series') {
+          if (targetSeason && targetSeason > 1) {
+            directSlugsToTry.push(`${baseSlug}-phan-${targetSeason}`);
+            directSlugsToTry.push(`${baseSlug}-season-${targetSeason}`);
+          }
+          directSlugsToTry.push(baseSlug);
+        }
+      }
+
+      for (const testSlug of directSlugsToTry) {
+        const detailRes = await fetchJson(`${KKPHIM_BASE}/phim/${testSlug}`);
+        const payload = extractMoviePayload(detailRes);
+        if (payload && payload.movie && Array.isArray(payload.episodes) && payload.episodes.length > 0) {
+          const m = payload.movie;
+          const tmdbMatched = meta.tmdbId && m.tmdb && m.tmdb.id && String(m.tmdb.id) === String(meta.tmdbId);
+          if (tmdbMatched || isTitleAndYearMatch(m, meta, type, targetSeason)) {
+            return payload;
+          }
+        }
+      }
+    }
+
+    // BƯỚC 5: Lấy chi tiết phim và danh sách tập từ các slug ứng viên
     for (const slug of candidateSlugs) {
       const detailUrl = `${KKPHIM_BASE}/phim/${slug}`;
       const detailRes = await fetchJson(detailUrl);
@@ -388,6 +490,7 @@
       }
     }
 
+    // BƯỚC 6: Dự phòng cho Anime/Hoạt hình gộp toàn bộ tập vào 1 phần duy nhất
     if (type === 'series' && fallbackSingleSeasonPayload && meta.absoluteEpisode) {
       return {
         movie: fallbackSingleSeasonPayload.movie,
@@ -406,7 +509,7 @@
       const fullMatch = serverData.find(ep => {
         const s = String(ep.slug || '').toLowerCase();
         const n = String(ep.name || '').toLowerCase();
-        return s === 'full' || n === 'full' || s === 'hd' || n === 'hd' || s === '1' || s === 'tap-1' || s === 'tap-01';
+        return s === 'full' || n === 'full' || s === 'hd' || n === 'hd' || s === 'fhd' || n === 'fhd' || s === '1' || s === 'tap-1' || s === 'tap-01';
       });
       return fullMatch || serverData[0];
     }
@@ -465,7 +568,7 @@
         priority: 2
       };
     }
-    if (norm.includes('vietsub') || norm.includes('phu de') || norm.includes('sub')) {
+    if (norm.includes('vietsub') || norm.includes('phu de') || norm.includes('sub viet')) {
       return {
         key: 'vietsub',
         badge: '🇻🇳 Vietsub',
@@ -473,12 +576,20 @@
         priority: 3
       };
     }
+    if (norm.includes('engsub') || norm.includes('sub anh')) {
+      return {
+        key: 'engsub',
+        badge: '🇬🇧 Engsub',
+        shortLabel: 'Engsub',
+        priority: 4
+      };
+    }
 
     return {
       key: 'other',
       badge: `🎬 ${serverName || 'Server KKPhim'}`,
       shortLabel: serverName || 'Mặc định',
-      priority: 4
+      priority: 5
     };
   }
 
@@ -493,10 +604,6 @@
 
     const { movie, episodes, useAbsoluteEpisode } = kkData;
     const isMovie = type === 'movie';
-
-    const categories = Array.isArray(movie.category)
-      ? movie.category.map(c => c.name).filter(Boolean).join(', ')
-      : (meta.genres || []).join(', ');
 
     const qualityBadge = movie.quality || 'FHD';
     const movieTitleVi = movie.name || meta.title || '';
@@ -523,10 +630,11 @@
         ? `Tập ${matchedEp.name || 'Full'}`
         : `S${String(parsedId.season || 1).padStart(2, '0')}E${String(parsedId.episode || 1).padStart(2, '0')} (${matchedEp.name || `Tập ${parsedId.episode}`})`;
 
+      // Đã loại bỏ phần Thể loại, chỉ hiển thị gọn Máy chủ theo yêu cầu
       const titleLines = [
-        `🎬 ${movieTitleVi}${movieTitleEn ? ` (${movieTitleEn})` : ''} ${yearStr ? `[${yearStr}]` : ''}`,
+        `🎬 ${movieTitleVi}${movieTitleEn && movieTitleEn !== movieTitleVi ? ` (${movieTitleEn})` : ''} ${yearStr ? `[${yearStr}]` : ''}`.trim(),
         `📺 ${epLabel} • 🎞️ ${qualityBadge} • ${audioInfo.badge}`,
-        `🏷️ Thể loại: ${categories || 'Đang cập nhật'} • 🌐 Máy chủ: ${serverName}`
+        `🌐 Máy chủ: ${serverName}`
       ];
 
       rawStreams.push({
@@ -551,7 +659,7 @@
       id: 'kkphim-vn',
       name: 'KKPhim (Vietsub • Thuyết Minh • Lồng Tiếng)',
       description: 'Nguồn phim chất lượng cao từ KKPhim (phimapi.com) chuẩn TMDB ID',
-      version: '1.2.1',
+      version: '1.3.0',
       author: 'KKPhim Nuvio Addon',
       supportedTypes: ['movie', 'tv'],
       filename: 'providers/kkphim.js',
