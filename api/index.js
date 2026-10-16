@@ -56,9 +56,9 @@
   var MANIFEST = {
     id: 'vn.nuvio.kkphim.streams',
     version: '1.0.0',
-    name: 'KKPhim Streams',
+    name: 'KKPhim',
     description: 'Addon lấy nguồn phim chuẩn TMDB ID từ KKPhim. Chuẩn Season/Tập, đầy đủ Vietsub, Thuyết Minh, Lồng Tiếng.',
-    logo: 'https://kkphim.com/favicon.ico',
+    logo: 'https://github.com/regodfather91/kkp/blob/main/logo.png',
     resources: ['stream'],
     types: ['movie', 'series'],
     idPrefixes: ['tt', 'tmdb:', 'tmdb'],
