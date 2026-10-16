@@ -1,13 +1,25 @@
 (function () {
-  const KKPHIM_BASE = 'https://phimapi.com';
-  const CINEMETA_BASE = 'https://v3-cinemeta.strem.io';
-  const TMDB_API_BASE = 'https://api.themoviedb.org/3';
+  var KKPHIM_BASE = 'https://phimapi.com';
+  var CINEMETA_BASE = 'https://v3-cinemeta.strem.io';
+  var TMDB_API_BASE = 'https://api.themoviedb.org/3';
 
-  const cache = new Map();
-  const CACHE_TTL = 15 * 60 * 1000;
+  var cache = new Map();
+  var CACHE_TTL = 15 * 60 * 1000;
 
   function getCache(key) {
-    const item = cache.get(key);
+    var item = cache.get(key);
+    if (!item) return null;
+    if (Date.now() > item.expiry) {
+      cache.delete(function () {
+  var KKPHIM_BASE = 'https://phimapi.com';
+  var CINEMETA_BASE = 'https://v3-cinemeta.strem.io';
+  var TMDB_API_BASE = 'https://api.themoviedb.org/3';
+
+  var cache = new Map();
+  var CACHE_TTL = 15 * 60 * 1000;
+
+  function getCache(key) {
+    var item = cache.get(key);
     if (!item) return null;
     if (Date.now() > item.expiry) {
       cache.delete(key);
@@ -16,32 +28,34 @@
     return item.value;
   }
 
-  function setCache(key, value, ttl = CACHE_TTL) {
+  function setCache(key, value, ttl) {
+    var effectiveTtl = ttl || CACHE_TTL;
     if (cache.size > 500) {
-      const firstKey = cache.keys().next().value;
+      var firstKey = cache.keys().next().value;
       cache.delete(firstKey);
     }
-    cache.set(key, { value, expiry: Date.now() + ttl });
+    cache.set(key, { value: value, expiry: Date.now() + effectiveTtl });
   }
 
-  async function fetchJson(url, timeoutMs = 7000) {
-    const cached = getCache(url);
+  async function fetchJson(url, timeoutMs) {
+    var timeout = timeoutMs || 7000;
+    var cached = getCache(url);
     if (cached) return cached;
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    var controller = new AbortController();
+    var timer = setTimeout(function () { controller.abort(); }, timeout);
 
     try {
-      const res = await fetch(url, {
+      var res = await fetch(url, {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
-          'User-Agent': 'Nuvio-KKPhim-Addon/1.3'
+          'User-Agent': 'Nuvio-KKPhim-Addon/1.0'
         },
         signal: controller.signal
       });
       if (!res.ok) return null;
-      const data = await res.json();
+      var data = await res.json();
       setCache(url, data);
       return data;
     } catch (err) {
@@ -51,7 +65,7 @@
     }
   }
 
-  const MANIFEST = {
+  var MANIFEST = {
     id: 'vn.nuvio.kkphim.streams',
     version: '1.0.0',
     name: 'KKPhim Streams',
@@ -59,7 +73,7 @@
     logo: 'https://kkphim.com/favicon.ico',
     resources: ['stream'],
     types: ['movie', 'series'],
-    idPrefixes: ['tt', 'tmdb:'],
+    idPrefixes: ['tt', 'tmdb:', 'tmdb'],
     catalogs: [],
     behaviorHints: {
       configurable: false,
@@ -68,10 +82,10 @@
   };
 
   function parseStremioId(rawId) {
-    const decoded = decodeURIComponent(String(rawId || '').trim());
+    var decoded = decodeURIComponent(String(rawId || '').trim());
 
     if (decoded.startsWith('tmdb:')) {
-      const parts = decoded.split(':');
+      var parts = decoded.split(':');
       return {
         source: 'tmdb',
         tmdbId: parts[1],
@@ -81,22 +95,33 @@
       };
     }
 
-    const parts = decoded.split(':');
+    if (decoded.startsWith('tmdb-')) {
+      var dashParts = decoded.replace('tmdb-', '').split(':');
+      return {
+        source: 'tmdb',
+        tmdbId: dashParts[0],
+        imdbId: null,
+        season: dashParts[1] ? parseInt(dashParts[1], 10) : null,
+        episode: dashParts[2] ? parseInt(dashParts[2], 10) : null
+      };
+    }
+
+    var imdbParts = decoded.split(':');
     return {
       source: 'imdb',
-      imdbId: parts[0],
+      imdbId: imdbParts[0],
       tmdbId: null,
-      season: parts[1] ? parseInt(parts[1], 10) : null,
-      episode: parts[2] ? parseInt(parts[2], 10) : null
+      season: imdbParts[1] ? parseInt(imdbParts[1], 10) : null,
+      episode: imdbParts[2] ? parseInt(imdbParts[2], 10) : null
     };
   }
 
   async function resolveMetadata(type, parsedId) {
-    const tmdbType = type === 'series' ? 'tv' : 'movie';
-    const result = {
+    var tmdbType = type === 'series' ? 'tv' : 'movie';
+    var result = {
       tmdbId: parsedId.tmdbId || null,
       imdbId: parsedId.imdbId || null,
-      tmdbType,
+      tmdbType: tmdbType,
       title: null,
       originalTitle: null,
       year: null,
@@ -104,9 +129,9 @@
     };
 
     if (result.imdbId) {
-      const cinemetaUrl = `${CINEMETA_BASE}/meta/${type}/${result.imdbId}.json`;
-      const cinemetaData = await fetchJson(cinemetaUrl);
-      const meta = cinemetaData && cinemetaData.meta ? cinemetaData.meta : null;
+      var cinemetaUrl = CINEMETA_BASE + '/meta/' + type + '/' + result.imdbId + '.json';
+      var cinemetaData = await fetchJson(cinemetaUrl);
+      var meta = cinemetaData && cinemetaData.meta ? cinemetaData.meta : null;
 
       if (meta) {
         if (meta.moviedb_id && !result.tmdbId) {
@@ -121,17 +146,18 @@
         }
 
         if (type === 'series' && Array.isArray(meta.videos) && parsedId.season && parsedId.episode) {
-          const regularVideos = meta.videos
-            .filter(v => Number(v.season) > 0 && Number(v.episode || v.number) > 0)
-            .sort((a, b) => {
+          var regularVideos = meta.videos
+            .filter(function (v) { return Number(v.season) > 0 && Number(v.episode || v.number) > 0; })
+            .sort(function (a, b) {
               if (Number(a.season) !== Number(b.season)) return Number(a.season) - Number(b.season);
               return Number(a.episode || a.number) - Number(b.episode || b.number);
             });
 
-          let absCount = 0;
-          for (const v of regularVideos) {
+          var absCount = 0;
+          for (var i = 0; i < regularVideos.length; i++) {
+            var v = regularVideos[i];
             absCount++;
-            const epNum = Number(v.episode || v.number);
+            var epNum = Number(v.episode || v.number);
             if (Number(v.season) === parsedId.season && epNum === parsedId.episode) {
               result.absoluteEpisode = absCount;
               break;
@@ -141,33 +167,33 @@
       }
     }
 
-    const tmdbApiKey = process.env.TMDB_API_KEY;
+    var tmdbApiKey = process.env.TMDB_API_KEY;
     if (tmdbApiKey) {
       if (!result.tmdbId && result.imdbId) {
-        const findUrl = `${TMDB_API_BASE}/find/${result.imdbId}?api_key=${tmdbApiKey}&external_source=imdb_id&language=vi-VN`;
-        const findData = await fetchJson(findUrl);
+        var findUrl = TMDB_API_BASE + '/find/' + result.imdbId + '?api_key=' + tmdbApiKey + '&external_source=imdb_id&language=vi-VN';
+        var findData = await fetchJson(findUrl);
         if (findData) {
-          const matchList = tmdbType === 'tv'
+          var matchList = tmdbType === 'tv'
             ? ((findData.tv_results && findData.tv_results.length) ? findData.tv_results : findData.movie_results)
             : ((findData.movie_results && findData.movie_results.length) ? findData.movie_results : findData.tv_results);
 
           if (matchList && matchList.length > 0) {
-            const item = matchList[0];
+            var item = matchList[0];
             result.tmdbId = String(item.id);
             result.title = item.title || item.name || result.title;
             result.originalTitle = item.original_title || item.original_name || result.originalTitle;
-            const dateStr = item.release_date || item.first_air_date;
+            var dateStr = item.release_date || item.first_air_date;
             if (dateStr) result.year = parseInt(dateStr.slice(0, 4), 10);
           }
         }
       } else if (result.tmdbId && !result.originalTitle) {
-        const detailUrl = `${TMDB_API_BASE}/${tmdbType}/${result.tmdbId}?api_key=${tmdbApiKey}&language=vi-VN`;
-        const detailData = await fetchJson(detailUrl);
+        var detailUrl = TMDB_API_BASE + '/' + tmdbType + '/' + result.tmdbId + '?api_key=' + tmdbApiKey + '&language=vi-VN';
+        var detailData = await fetchJson(detailUrl);
         if (detailData) {
           result.title = detailData.title || detailData.name || result.title;
           result.originalTitle = detailData.original_title || detailData.original_name || result.originalTitle;
-          const dateStr = detailData.release_date || detailData.first_air_date;
-          if (dateStr) result.year = parseInt(dateStr.slice(0, 4), 10);
+          var dStr = detailData.release_date || detailData.first_air_date;
+          if (dStr) result.year = parseInt(dStr.slice(0, 4), 10);
         }
       }
     }
@@ -190,22 +216,19 @@
     return normalizeText(str).replace(/\s+/g, '-');
   }
 
-  // Làm sạch tên phim (loại bỏ năm phát hành trong ngoặc như "Mai (2024)" và hậu tố Phần/Season) để so khớp chính xác
-  function cleanTitleForMatch(rawTitle, yearToStrip = null) {
-    let cleaned = String(rawTitle || '')
-      // Bỏ năm trong ngoặc đơn hoặc ngoặc vuông: (2024), [2024]
+  function cleanTitleForMatch(rawTitle, yearToStrip) {
+    var cleaned = String(rawTitle || '')
       .replace(/[\(\[\{]\s*(?:19|20)\d{2}\s*[\)\]\}]/g, ' ')
-      // Bỏ hậu tố Phần / Season trong ngoặc
       .replace(/[\(\[\{]\s*(?:phần|phan|season|ss|mùa|mua|part)\s*\d+\s*[\)\]\}]/gi, ' ');
 
-    let norm = normalizeText(cleaned)
+    var norm = normalizeText(cleaned)
       .replace(/\b(?:phan|season|ss|mua|part)\s*0*\d+\b/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
 
     if (yearToStrip) {
-      const yearRegex = new RegExp(`\\b${yearToStrip}$`);
-      const stripped = norm.replace(yearRegex, '').trim();
+      var yearRegex = new RegExp('\\b' + yearToStrip + '$');
+      var stripped = norm.replace(yearRegex, '').trim();
       if (stripped.length > 0) {
         norm = stripped;
       }
@@ -214,13 +237,12 @@
     return norm;
   }
 
-  // Trích xuất năm phát hành nếu bị gắn trong tên hoặc slug (ví dụ: "Mai (2024)" -> 2024, "mai-2024" -> 2024)
   function extractYearFromItem(item) {
     if (item && item.year && !Number.isNaN(parseInt(item.year, 10))) {
       return parseInt(item.year, 10);
     }
-    const combined = `${item?.name || ''} ${item?.origin_name || ''} ${item?.slug || ''}`;
-    const match = combined.match(/(?:[\(\[\-\s])((?:19|20)\d{2})(?:[\)\]\s]|$)/);
+    var combined = ((item && item.name) || '') + ' ' + ((item && item.origin_name) || '') + ' ' + ((item && item.slug) || '');
+    var match = combined.match(/(?:[\(\[\-\s])((?:19|20)\d{2})(?:[\)\]\s]|$)/);
     if (match && match[1]) {
       return parseInt(match[1], 10);
     }
@@ -228,15 +250,15 @@
   }
 
   function extractSeasonFromTitleOrSlug(name, originName, slug) {
-    const combined = `${normalizeText(name)} | ${normalizeText(originName)} | ${String(slug || '').toLowerCase()}`;
-    const patterns = [
+    var combined = normalizeText(name) + ' | ' + normalizeText(originName) + ' | ' + String(slug || '').toLowerCase();
+    var patterns = [
       /\b(?:phan|season|ss|mua)\s*0*(\d+)\b/i,
       /\bs0*(\d+)\b/i,
       /-phan-0*(\d+)\b/i,
       /-season-0*(\d+)\b/i
     ];
-    for (const regex of patterns) {
-      const match = combined.match(regex);
+    for (var i = 0; i < patterns.length; i++) {
+      var match = combined.match(patterns[i]);
       if (match && match[1]) {
         return parseInt(match[1], 10);
       }
@@ -247,8 +269,8 @@
   function isSeasonMatch(movieObj, targetSeason) {
     if (!targetSeason) return true;
 
-    const rawTmdbSeason = movieObj && movieObj.tmdb ? movieObj.tmdb.season : null;
-    const tmdbSeason = rawTmdbSeason !== null && rawTmdbSeason !== undefined
+    var rawTmdbSeason = movieObj && movieObj.tmdb ? movieObj.tmdb.season : null;
+    var tmdbSeason = rawTmdbSeason !== null && rawTmdbSeason !== undefined
       ? parseInt(rawTmdbSeason, 10)
       : null;
 
@@ -256,7 +278,7 @@
       return tmdbSeason === targetSeason;
     }
 
-    const detectedSeason = extractSeasonFromTitleOrSlug(
+    var detectedSeason = extractSeasonFromTitleOrSlug(
       movieObj ? movieObj.name : '',
       movieObj ? movieObj.origin_name : '',
       movieObj ? movieObj.slug : ''
@@ -271,8 +293,8 @@
 
   function isTypeCompatible(movieObj, requestedType) {
     if (!movieObj) return false;
-    const kkTmdbType = movieObj.tmdb ? movieObj.tmdb.type : null;
-    const kkType = movieObj.type;
+    var kkTmdbType = movieObj.tmdb ? movieObj.tmdb.type : null;
+    var kkType = movieObj.type;
 
     if (requestedType === 'movie') {
       if (kkTmdbType === 'movie') return true;
@@ -293,22 +315,22 @@
   function isTitleAndYearMatch(item, meta, requestedType, targetSeason) {
     if (!isTypeCompatible(item, requestedType)) return false;
 
-    const itemYear = extractYearFromItem(item);
-    const refYear = meta.year || itemYear;
+    var itemYear = extractYearFromItem(item);
+    var refYear = meta.year || itemYear;
 
-    const targetTitles = [
+    var targetTitles = [
       cleanTitleForMatch(meta.originalTitle, refYear),
       cleanTitleForMatch(meta.title, refYear)
     ].filter(Boolean);
 
     if (targetTitles.length === 0) return false;
 
-    const itemTitles = [
+    var itemTitles = [
       cleanTitleForMatch(item.origin_name, refYear),
       cleanTitleForMatch(item.name, refYear)
     ].filter(Boolean);
 
-    const isExactTitle = itemTitles.some(t => targetTitles.includes(t));
+    var isExactTitle = itemTitles.some(function (t) { return targetTitles.includes(t); });
     if (!isExactTitle) return false;
 
     if (requestedType === 'movie') {
@@ -336,17 +358,16 @@
   }
 
   async function findKKPhimMovieData(type, parsedId, meta) {
-    const targetSeason = parsedId.season;
-    const candidateSlugs = new Set();
-    let fallbackSingleSeasonPayload = null;
+    var targetSeason = parsedId.season;
+    var candidateSlugs = new Set();
+    var fallbackSingleSeasonPayload = null;
 
-    // BƯỚC 1: Tra cứu trực tiếp qua Endpoint TMDB của KKPhim (/tmdb/{type}/{id})
     if (meta.tmdbId) {
-      const directUrl = `${KKPHIM_BASE}/tmdb/${meta.tmdbType}/${meta.tmdbId}`;
-      const directRes = await fetchJson(directUrl);
+      var directUrl = KKPHIM_BASE + '/tmdb/' + meta.tmdbType + '/' + meta.tmdbId;
+      var directRes = await fetchJson(directUrl);
 
       if (directRes) {
-        const payload = extractMoviePayload(directRes);
+        var payload = extractMoviePayload(directRes);
         if (payload && isTypeCompatible(payload.movie, type)) {
           if (type === 'movie' || isSeasonMatch(payload.movie, targetSeason)) {
             if (payload.episodes && payload.episodes.length > 0) {
@@ -364,73 +385,72 @@
           }
         }
 
-        const listItems = directRes.items || (directRes.data && directRes.data.items) || (Array.isArray(directRes.data) ? directRes.data : null);
+        var listItems = directRes.items || (directRes.data && directRes.data.items) || (Array.isArray(directRes.data) ? directRes.data : null);
         if (Array.isArray(listItems)) {
-          for (const item of listItems) {
-            if (isTypeCompatible(item, type) && (type === 'movie' || isSeasonMatch(item, targetSeason))) {
-              if (item.slug) candidateSlugs.add(item.slug);
+          for (var i = 0; i < listItems.length; i++) {
+            var listItem = listItems[i];
+            if (isTypeCompatible(listItem, type) && (type === 'movie' || isSeasonMatch(listItem, targetSeason))) {
+              if (listItem.slug) candidateSlugs.add(listItem.slug);
             }
           }
         }
       }
     }
 
-    // BƯỚC 2: Tra cứu trực tiếp qua Endpoint IMDb của KKPhim (/imdb/title/{id})
     if (candidateSlugs.size === 0 && meta.imdbId) {
-      const imdbUrl = `${KKPHIM_BASE}/imdb/title/${meta.imdbId}`;
-      const imdbRes = await fetchJson(imdbUrl);
-      const payload = extractMoviePayload(imdbRes);
-      if (payload && isTypeCompatible(payload.movie, type)) {
-        if (type === 'movie' || isSeasonMatch(payload.movie, targetSeason)) {
-          if (payload.episodes && payload.episodes.length > 0) {
-            return payload;
+      var imdbUrl = KKPHIM_BASE + '/imdb/title/' + meta.imdbId;
+      var imdbRes = await fetchJson(imdbUrl);
+      var imdbPayload = extractMoviePayload(imdbRes);
+      if (imdbPayload && isTypeCompatible(imdbPayload.movie, type)) {
+        if (type === 'movie' || isSeasonMatch(imdbPayload.movie, targetSeason)) {
+          if (imdbPayload.episodes && imdbPayload.episodes.length > 0) {
+            return imdbPayload;
           }
-          if (payload.movie && payload.movie.slug) candidateSlugs.add(payload.movie.slug);
+          if (imdbPayload.movie && imdbPayload.movie.slug) candidateSlugs.add(imdbPayload.movie.slug);
         } else if (type === 'series' && targetSeason > 1) {
-          if (!meta.originalTitle && payload.movie && payload.movie.origin_name) {
-            meta.originalTitle = payload.movie.origin_name;
+          if (!meta.originalTitle && imdbPayload.movie && imdbPayload.movie.origin_name) {
+            meta.originalTitle = imdbPayload.movie.origin_name;
           }
-          fallbackSingleSeasonPayload = fallbackSingleSeasonPayload || payload;
+          fallbackSingleSeasonPayload = fallbackSingleSeasonPayload || imdbPayload;
         }
       }
     }
 
-    // BƯỚC 3: Tìm kiếm thông minh qua /v1/api/tim-kiem (Xử lý cả tên có kèm năm như "Mai (2024)" và phim tách nhiều Season)
     if (candidateSlugs.size === 0) {
-      const searchKeywords = [];
-      const baseOrigin = meta.originalTitle
+      var searchKeywords = [];
+      var baseOrigin = meta.originalTitle
         ? meta.originalTitle.replace(/\s*\((?:Phần|Season|\d{4})\s*\d*\)/gi, '').trim()
         : '';
-      const baseTitle = (meta.title && meta.title !== meta.originalTitle)
+      var baseTitle = (meta.title && meta.title !== meta.originalTitle)
         ? meta.title.replace(/\s*\((?:Phần|Season|\d{4})\s*\d*\)/gi, '').trim()
         : '';
 
-      // Với phim lẻ có tên ngắn (như "Mai"), ưu tiên tìm kèm năm ("Mai 2024") trước để không bị trôi kết quả
       if (type === 'movie' && baseOrigin && meta.year && baseOrigin.length <= 12) {
-        searchKeywords.push(`${baseOrigin} ${meta.year}`);
+        searchKeywords.push(baseOrigin + ' ' + meta.year);
       }
       if (baseOrigin) searchKeywords.push(baseOrigin);
       if (baseTitle) searchKeywords.push(baseTitle);
       if (type === 'movie' && baseOrigin && meta.year && baseOrigin.length > 12) {
-        searchKeywords.push(`${baseOrigin} ${meta.year}`);
+        searchKeywords.push(baseOrigin + ' ' + meta.year);
       }
 
-      for (const kw of searchKeywords) {
+      for (var k = 0; k < searchKeywords.length; k++) {
+        var kw = searchKeywords[k];
         if (!kw) continue;
-        const searchUrl = `${KKPHIM_BASE}/v1/api/tim-kiem?keyword=${encodeURIComponent(kw)}&limit=32`;
-        const searchRes = await fetchJson(searchUrl);
-        const items = (searchRes && searchRes.data && searchRes.data.items) || (searchRes && searchRes.items) || [];
+        var searchUrl = KKPHIM_BASE + '/v1/api/tim-kiem?keyword=' + encodeURIComponent(kw) + '&limit=32';
+        var searchRes = await fetchJson(searchUrl);
+        var items = (searchRes && searchRes.data && searchRes.data.items) || (searchRes && searchRes.items) || [];
 
         if (!Array.isArray(items) || items.length === 0) continue;
 
-        // Ưu tiên 1: Khớp chính xác TMDB ID và Season
-        for (const item of items) {
-          const itemTmdbId = (item && item.tmdb && item.tmdb.id) ? String(item.tmdb.id) : null;
+        for (var j = 0; j < items.length; j++) {
+          var item = items[j];
+          var itemTmdbId = (item && item.tmdb && item.tmdb.id) ? String(item.tmdb.id) : null;
           if (meta.tmdbId && itemTmdbId === String(meta.tmdbId)) {
             if (type === 'movie' || isSeasonMatch(item, targetSeason)) {
               if (item.slug) candidateSlugs.add(item.slug);
             } else if (type === 'series' && !fallbackSingleSeasonPayload && item.slug) {
-              const detailRes = await fetchJson(`${KKPHIM_BASE}/phim/${item.slug}`);
+              var detailRes = await fetchJson(KKPHIM_BASE + '/phim/' + item.slug);
               fallbackSingleSeasonPayload = extractMoviePayload(detailRes);
             }
           }
@@ -438,10 +458,10 @@
 
         if (candidateSlugs.size > 0) break;
 
-        // Ưu tiên 2: Khớp tên phim (đã lọc bỏ "(2024)" trong origin_name/name của KKPhim) + Năm phát hành / Season
-        for (const item of items) {
-          if (isTitleAndYearMatch(item, meta, type, targetSeason)) {
-            if (item.slug) candidateSlugs.add(item.slug);
+        for (var mIdx = 0; mIdx < items.length; mIdx++) {
+          var candidate = items[mIdx];
+          if (isTitleAndYearMatch(candidate, meta, type, targetSeason)) {
+            if (candidate.slug) candidateSlugs.add(candidate.slug);
           }
         }
 
@@ -449,48 +469,47 @@
       }
     }
 
-    // BƯỚC 4: Truy vấn trực tiếp theo Slug chuẩn của KKPhim (VD: /phim/mai-2024 hoặc /phim/mai) nếu API tìm kiếm chưa trả về
     if (candidateSlugs.size === 0 && (meta.originalTitle || meta.title)) {
-      const baseSlug = toSlug(cleanTitleForMatch(meta.originalTitle || meta.title, meta.year));
-      const directSlugsToTry = [];
+      var baseSlug = toSlug(cleanTitleForMatch(meta.originalTitle || meta.title, meta.year));
+      var directSlugsToTry = [];
 
       if (baseSlug) {
         if (type === 'movie') {
-          if (meta.year) directSlugsToTry.push(`${baseSlug}-${meta.year}`);
+          if (meta.year) directSlugsToTry.push(baseSlug + '-' + meta.year);
           directSlugsToTry.push(baseSlug);
         } else if (type === 'series') {
           if (targetSeason && targetSeason > 1) {
-            directSlugsToTry.push(`${baseSlug}-phan-${targetSeason}`);
-            directSlugsToTry.push(`${baseSlug}-season-${targetSeason}`);
+            directSlugsToTry.push(baseSlug + '-phan-' + targetSeason);
+            directSlugsToTry.push(baseSlug + '-season-' + targetSeason);
           }
           directSlugsToTry.push(baseSlug);
         }
       }
 
-      for (const testSlug of directSlugsToTry) {
-        const detailRes = await fetchJson(`${KKPHIM_BASE}/phim/${testSlug}`);
-        const payload = extractMoviePayload(detailRes);
-        if (payload && payload.movie && Array.isArray(payload.episodes) && payload.episodes.length > 0) {
-          const m = payload.movie;
-          const tmdbMatched = meta.tmdbId && m.tmdb && m.tmdb.id && String(m.tmdb.id) === String(meta.tmdbId);
+      for (var sIdx = 0; sIdx < directSlugsToTry.length; sIdx++) {
+        var testSlug = directSlugsToTry[sIdx];
+        var directDetailRes = await fetchJson(KKPHIM_BASE + '/phim/' + testSlug);
+        var directPayload = extractMoviePayload(directDetailRes);
+        if (directPayload && directPayload.movie && Array.isArray(directPayload.episodes) && directPayload.episodes.length > 0) {
+          var m = directPayload.movie;
+          var tmdbMatched = meta.tmdbId && m.tmdb && m.tmdb.id && String(m.tmdb.id) === String(meta.tmdbId);
           if (tmdbMatched || isTitleAndYearMatch(m, meta, type, targetSeason)) {
-            return payload;
+            return directPayload;
           }
         }
       }
     }
 
-    // BƯỚC 5: Lấy chi tiết phim và danh sách tập từ các slug ứng viên
-    for (const slug of candidateSlugs) {
-      const detailUrl = `${KKPHIM_BASE}/phim/${slug}`;
-      const detailRes = await fetchJson(detailUrl);
-      const payload = extractMoviePayload(detailRes);
-      if (payload && Array.isArray(payload.episodes) && payload.episodes.length > 0) {
-        return payload;
+    var slugArray = Array.from(candidateSlugs);
+    for (var cIdx = 0; cIdx < slugArray.length; cIdx++) {
+      var slug = slugArray[cIdx];
+      var slugDetailRes = await fetchJson(KKPHIM_BASE + '/phim/' + slug);
+      var slugPayload = extractMoviePayload(slugDetailRes);
+      if (slugPayload && Array.isArray(slugPayload.episodes) && slugPayload.episodes.length > 0) {
+        return slugPayload;
       }
     }
 
-    // BƯỚC 6: Dự phòng cho Anime/Hoạt hình gộp toàn bộ tập vào 1 phần duy nhất
     if (type === 'series' && fallbackSingleSeasonPayload && meta.absoluteEpisode) {
       return {
         movie: fallbackSingleSeasonPayload.movie,
@@ -502,35 +521,36 @@
     return null;
   }
 
-  function findMatchingEpisodeItem(serverData, targetEpisode, absoluteEpisode = null, isMovie = false) {
+  function findMatchingEpisodeItem(serverData, targetEpisode, absoluteEpisode, isMovie) {
     if (!Array.isArray(serverData) || serverData.length === 0) return null;
 
     if (isMovie) {
-      const fullMatch = serverData.find(ep => {
-        const s = String(ep.slug || '').toLowerCase();
-        const n = String(ep.name || '').toLowerCase();
+      var fullMatch = serverData.find(function (ep) {
+        var s = String(ep.slug || '').toLowerCase();
+        var n = String(ep.name || '').toLowerCase();
         return s === 'full' || n === 'full' || s === 'hd' || n === 'hd' || s === 'fhd' || n === 'fhd' || s === '1' || s === 'tap-1' || s === 'tap-01';
       });
       return fullMatch || serverData[0];
     }
 
-    const extractEpNumbers = (ep) => {
-      const numbers = [];
-      const slug = String(ep.slug || '').toLowerCase().trim();
-      const name = String(ep.name || '').toLowerCase().trim();
+    var extractEpNumbers = function (ep) {
+      var numbers = [];
+      var slug = String(ep.slug || '').toLowerCase().trim();
+      var name = String(ep.name || '').toLowerCase().trim();
 
-      const slugMatch = slug.match(/^(?:tap-|ep-|episode-|t-)?0*(\d+)(?:[-_][a-z]+)?$/i);
+      var slugMatch = slug.match(/^(?:tap-|ep-|episode-|t-)?0*(\d+)(?:[-_][a-z]+)?$/i);
       if (slugMatch) numbers.push(parseInt(slugMatch[1], 10));
 
-      const nameMatch = name.match(/(?:tập|tap|ep|episode|^)\s*0*(\d+)(?:\b|$)/i);
+      var nameMatch = name.match(/(?:tập|tap|ep|episode|^)\s*0*(\d+)(?:\b|$)/i);
       if (nameMatch) numbers.push(parseInt(nameMatch[1], 10));
 
       return numbers;
     };
 
     if (targetEpisode !== null && targetEpisode !== undefined) {
-      for (const ep of serverData) {
-        const epNums = extractEpNumbers(ep);
+      for (var i = 0; i < serverData.length; i++) {
+        var ep = serverData[i];
+        var epNums = extractEpNumbers(ep);
         if (epNums.includes(Number(targetEpisode))) {
           return ep;
         }
@@ -538,10 +558,11 @@
     }
 
     if (absoluteEpisode !== null && absoluteEpisode !== undefined) {
-      for (const ep of serverData) {
-        const epNums = extractEpNumbers(ep);
-        if (epNums.includes(Number(absoluteEpisode))) {
-          return ep;
+      for (var j = 0; j < serverData.length; j++) {
+        var absEp = serverData[j];
+        var absNums = extractEpNumbers(absEp);
+        if (absNums.includes(Number(absoluteEpisode))) {
+          return absEp;
         }
       }
     }
@@ -550,6 +571,818 @@
   }
 
   function classifyAudioType(serverName) {
+    var norm = normalizeText(serverName);
+
+    if (norm.in    cleanTitleForMatch(item.name, refYear)
+    ].filter(Boolean);
+
+    var isExactTitle = itemTitles.some(function (t) { return targetTitles.includes(t); });
+    if (!isExactTitle) return false;
+
+    if (requestedType === 'movie') {
+      if (meta.year && itemYear && Math.abs(itemYear - meta.year) > 1) {
+        return false;
+      }
+      return true;
+    }
+
+    return isSeasonMatch(item, targetSeason);
+  }
+
+  function extractMoviePayload(apiResponse) {
+    if (!apiResponse) return null;
+    if (apiResponse.movie && Array.isArray(apiResponse.episodes)) {
+      return { movie: apiResponse.movie, episodes: apiResponse.episodes };
+    }
+    if (apiResponse.data && apiResponse.data.item) {
+      return {
+        movie: apiResponse.data.item,
+        episodes: apiResponse.data.item.episodes || apiResponse.episodes || []
+      };
+    }
+    return null;
+  }
+
+  async function findKKPhimMovieData(type, parsedId, meta) {
+    var targetSeason = parsedId.season;
+    var candidateSlugs = new Set();
+    var fallbackSingleSeasonPayload = null;
+
+    if (meta.tmdbId) {
+      var directUrl = KKPHIM_BASE + '/tmdb/' + meta.tmdbType + '/' + meta.tmdbId;
+      var directRes = await fetchJson(directUrl);
+
+      if (directRes) {
+        var payload = extractMoviePayload(directRes);
+        if (payload && isTypeCompatible(payload.movie, type)) {
+          if (type === 'movie' || isSeasonMatch(payload.movie, targetSeason)) {
+            if (payload.episodes && payload.episodes.length > 0) {
+              return payload;
+            }
+            if (payload.movie && payload.movie.slug) candidateSlugs.add(payload.movie.slug);
+          } else if (type === 'series' && targetSeason > 1) {
+            if (!meta.originalTitle && payload.movie && payload.movie.origin_name) {
+              meta.originalTitle = payload.movie.origin_name;
+            }
+            if (!meta.title && payload.movie && payload.movie.name) {
+              meta.title = payload.movie.name;
+            }
+            fallbackSingleSeasonPayload = payload;
+          }
+        }
+
+        var listItems = directRes.items || (directRes.data && directRes.data.items) || (Array.isArray(directRes.data) ? directRes.data : null);
+        if (Array.isArray(listItems)) {
+          for (var i = 0; i < listItems.length; i++) {
+            var listItem = listItems[i];
+            if (isTypeCompatible(listItem, type) && (type === 'movie' || isSeasonMatch(listItem, targetSeason))) {
+              if (listItem.slug) candidateSlugs.add(listItem.slug);
+            }
+          }
+        }
+      }
+    }
+
+    if (candidateSlugs.size === 0 && meta.imdbId) {
+      var imdbUrl = KKPHIM_BASE + '/imdb/title/' + meta.imdbId;
+      var imdbRes = await fetchJson(imdbUrl);
+      var imdbPayload = extractMoviePayload(imdbRes);
+      if (imdbPayload && isTypeCompatible(imdbPayload.movie, type)) {
+        if (type === 'movie' || isSeasonMatch(imdbPayload.movie, targetSeason)) {
+          if (imdbPayload.episodes && imdbPayload.episodes.length > 0) {
+            return imdbPayload;
+          }
+          if (imdbPayload.movie && imdbPayload.movie.slug) candidateSlugs.add(imdbPayload.movie.slug);
+        } else if (type === 'series' && targetSeason > 1) {
+          if (!meta.originalTitle && imdbPayload.movie && imdbPayload.movie.origin_name) {
+            meta.originalTitle = imdbPayload.movie.origin_name;
+          }
+          fallbackSingleSeasonPayload = fallbackSingleSeasonPayload || imdbPayload;
+        }
+      }
+    }
+
+    if (candidateSlugs.size === 0) {
+      var searchKeywords = [];
+      var baseOrigin = meta.originalTitle
+        ? meta.originalTitle.replace(/\s*\((?:Phần|Season|\d{4})\s*\d*\)/gi, '').trim()
+        : '';
+      var baseTitle = (meta.title && meta.title !== meta.originalTitle)
+        ? meta.title.replace(/\s*\((?:Phần|Season|\d{4})\s*\d*\)/gi, '').trim()
+        : '';
+
+      if (type === 'movie' && baseOrigin && meta.year && baseOrigin.length <= 12) {
+        searchKeywords.push(baseOrigin + ' ' + meta.year);
+      }
+      if (baseOrigin) searchKeywords.push(baseOrigin);
+      if (baseTitle) searchKeywords.push(baseTitle);
+      if (type === 'movie' && baseOrigin && meta.year && baseOrigin.length > 12) {
+        searchKeywords.push(baseOrigin + ' ' + meta.year);
+      }
+
+      for (var k = 0; k < searchKeywords.length; k++) {
+        var kw = searchKeywords[k];
+        if (!kw) continue;
+        var searchUrl = KKPHIM_BASE + '/v1/api/tim-kiem?keyword=' + encodeURIComponent(kw) + '&limit=32';
+        var searchRes = await fetchJson(searchUrl);
+        var items = (searchRes && searchRes.data && searchRes.data.items) || (searchRes && searchRes.items) || [];
+
+        if (!Array.isArray(items) || items.length === 0) continue;
+
+        for (var j = 0; j < items.length; j++) {
+          var item = items[j];
+          var itemTmdbId = (item && item.tmdb && item.tmdb.id) ? String(item.tmdb.id) : null;
+          if (meta.tmdbId && itemTmdbId === String(meta.tmdbId)) {
+            if (type === 'movie' || isSeasonMatch(item, targetSeason)) {
+              if (item.slug) candidateSlugs.add(item.slug);
+            } else if (type === 'series' && !fallbackSingleSeasonPayload && item.slug) {
+              var detailRes = await fetchJson(KKPHIM_BASE + '/phim/' + item.slug);
+              fallbackSingleSeasonPayload = extractMoviePayload(detailRes);
+            }
+          }
+        }
+
+        if (candidateSlugs.size > 0) break;
+
+        for (var mIdx = 0; mIdx < items.length; mIdx++) {
+          var candidate = items[mIdx];
+          if (isTitleAndYearMatch(candidate, meta, type, targetSeason)) {
+            if (candidate.slug) candidateSlugs.add(candidate.slug);
+          }
+        }
+
+        if (candidateSlugs.size > 0) break;
+      }
+    }
+
+    if (candidateSlugs.size === 0 && (meta.originalTitle || meta.title)) {
+      var baseSlug = toSlug(cleanTitleForMatch(meta.originalTitle || meta.title, meta.year));
+      var directSlugsToTry = [];
+
+      if (baseSlug) {
+        if (type === 'movie') {
+          if (meta.year) directSlugsToTry.push(baseSlug + '-' + meta.year);
+          directSlugsToTry.push(baseSlug);
+        } else if (type === 'series') {
+          if (targetSeason && targetSeason > 1) {
+            directSlugsToTry.push(baseSlug + '-phan-' + targetSeason);
+            directSlugsToTry.push(baseSlug + '-season-' + targetSeason);
+          }
+          directSlugsToTry.push(baseSlug);
+        }
+      }
+
+      for (var sIdx = 0; sIdx < directSlugsToTry.length; sIdx++) {
+        var testSlug = directSlugsToTry[sIdx];
+        var directDetailRes = await fetchJson(KKPHIM_BASE + '/phim/' + testSlug);
+        var directPayload = extractMoviePayload(directDetailRes);
+        if (directPayload && directPayload.movie && Array.isArray(directPayload.episodes) && directPayload.episodes.length > 0) {
+          var m = directPayload.movie;
+          var tmdbMatched = meta.tmdbId && m.tmdb && m.tmdb.id && String(m.tmdb.id) === String(meta.tmdbId);
+          if (tmdbMatched || isTitleAndYearMatch(m, meta, type, targetSeason)) {
+            return directPayload;
+          }
+        }
+      }
+    }
+
+    var slugArray = Array.from(candidateSlugs);
+    for (var cIdx = 0; cIdx < slugArray.length; cIdx++) {
+      var slug = slugArray[cIdx];
+      var slugDetailRes = await fetchJson(KKPHIM_BASE + '/phim/' + slug);
+      var slugPayload = extractMoviePayload(slugDetailRes);
+      if (slugPayload && Array.isArray(slugPayload.episodes) && slugPayload.episodes.length > 0) {
+        return slugPayload;
+      }
+    }
+
+    if (type === 'series' && fallbackSingleSeasonPayload && meta.absoluteEpisode) {
+      return {
+        movie: fallbackSingleSeasonPayload.movie,
+        episodes: fallbackSingleSeasonPayload.episodes,
+        useAbsoluteEpisode: true
+      };
+    }
+
+    return null;
+  }
+
+  function findMatchingEpisodeItem(serverData, targetEpisode, absoluteEpisode, isMovie) {
+    if (!Array.isArray(serverData) || serverData.length === 0) return null;
+
+    if (isMovie) {
+      var fullMatch = serverData.find(function (ep) {
+        var s = String(ep.slug || '').toLowerCase();
+        var n = String(ep.name || '').toLowerCase();
+        return s === 'full' || n === 'full' || s === 'hd' || n === 'hd' || s === 'fhd' || n === 'fhd' || s === '1' || s === 'tap-1' || s === 'tap-01';
+      });
+      return fullMatch || serverData[0];
+    }
+
+    var extractEpNumbers = function (ep) {
+      var numbers = [];
+      var slug = String(ep.slug || '').toLowerCase().trim();
+      var name = String(ep.name || '').toLowerCase().trim();
+
+      var slugMatch = slug.match(/^(?:tap-|ep-|episode-|t-)?0*(\d+)(?:[-_][a-z]+)?$/i);
+      if (slugMatch) numbers.push(parseInt(slugMatch[1], 10));
+
+      var nameMatch = name.match(/(?:tập|tap|ep|episode|^)\s*0*(\d+)(?:\b|$)/i);
+      if (nameMatch) numbers.push(parseInt(nameMatch[1], 10));
+
+      return numbers;
+    };
+
+    if (targetEpisode !== null && targetEpisode !== undefined) {
+      for (var i = 0; i < serverData.length; i++) {
+        var ep = serverData[i];
+        var epNums = extractEpNumbers(ep);
+        if (epNums.includes(Number(targetEpisode))) {
+          return ep;
+        }
+      }
+    }
+
+    if (absoluteEpisode !== null && absoluteEpisode !== undefined) {
+      for (var j = 0; j < serverData.length; j++) {
+        var absEp = serverData[j];
+        var absNums = extractEpNumbers(absEp);
+        if (absNums.includes(Number(absoluteEpisode))) {
+          return absEp;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  function classifyAudioType(serverName) {
+    var norm = normalizeText(serverName);
+
+    if (norm.in(function () {
+  var KKPHIM_BASE = 'https://phimapi.com';
+  var CINEMETA_BASE = 'https://v3-cinemeta.strem.io';
+  var TMDB_API_BASE = 'https://api.themoviedb.org/3';
+
+  var cache = new Map();
+  var CACHE_TTL = 15 * 60 * 1000;
+
+  function getCache(key) {
+    var item = cache.get(key);
+    if (!item) return null;
+    if (Date.now() > item.expiry) {
+      cache.delete(key);
+      return null;
+    }
+    return item.value;
+  }
+
+  function setCache(key, value, ttl) {
+    var effectiveTtl = ttl || CACHE_TTL;
+    if (cache.size > 500) {
+      var firstKey = cache.keys().next().value;
+      cache.delete(firstKey);
+    }
+    cache.set(key, { value: value, expiry: Date.now() + effectiveTtl });
+  }
+
+  async function fetchJson(url, timeoutMs) {
+    var timeout = timeoutMs || 7000;
+    var cached = getCache(url);
+    if (cached) return cached;
+
+    var controller = new AbortController();
+    var timer = setTimeout(function () { controller.abort(); }, timeout);
+
+    try {
+      var res = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'Nuvio-KKPhim-Addon/1.0'
+        },
+        signal: controller.signal
+      });
+      if (!res.ok) return null;
+      var data = await res.json();
+      setCache(url, data);
+      return data;
+    } catch (err) {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  var MANIFEST = {
+    id: 'vn.nuvio.kkphim.streams',
+    version: '1.0.0',
+    name: 'KKPhim Streams',
+    description: 'Addon lấy nguồn phim chuẩn TMDB ID từ KKPhim. Chuẩn Season/Tập, đầy đủ Vietsub, Thuyết Minh, Lồng Tiếng.',
+    logo: 'https://kkphim.com/favicon.ico',
+    resources: ['stream'],
+    types: ['movie', 'series'],
+    idPrefixes: ['tt', 'tmdb:', 'tmdb'],
+    catalogs: [],
+    behaviorHints: {
+      configurable: false,
+      configurationRequired: false
+    }
+  };
+
+  function parseStremioId(rawId) {
+    var decoded = decodeURIComponent(String(rawId || '').trim());
+
+    if (decoded.startsWith('tmdb:')) {
+      var parts = decoded.split(':');
+      return {
+        source: 'tmdb',
+        tmdbId: parts[1],
+        imdbId: null,
+        season: parts[2] ? parseInt(parts[2], 10) : null,
+        episode: parts[3] ? parseInt(parts[3], 10) : null
+      };
+    }
+
+    if (decoded.startsWith('tmdb-')) {
+      var dashParts = decoded.replace('tmdb-', '').split(':');
+      return {
+        source: 'tmdb',
+        tmdbId: dashParts[0],
+        imdbId: null,
+        season: dashParts[1] ? parseInt(dashParts[1], 10) : null,
+        episode: dashParts[2] ? parseInt(dashParts[2], 10) : null
+      };
+    }
+
+    var imdbParts = decoded.split(':');
+    return {
+      source: 'imdb',
+      imdbId: imdbParts[0],
+      tmdbId: null,
+      season: imdbParts[1] ? parseInt(imdbParts[1], 10) : null,
+      episode: imdbParts[2] ? parseInt(imdbParts[2], 10) : null
+    };
+  }
+
+  async function resolveMetadata(type, parsedId) {
+    var tmdbType = type === 'series' ? 'tv' : 'movie';
+    var result = {
+      tmdbId: parsedId.tmdbId || null,
+      imdbId: parsedId.imdbId || null,
+      tmdbType: tmdbType,
+      title: null,
+      originalTitle: null,
+      year: null,
+      absoluteEpisode: null
+    };
+
+    if (result.imdbId) {
+      var cinemetaUrl = CINEMETA_BASE + '/meta/' + type + '/' + result.imdbId + '.json';
+      var cinemetaData = await fetchJson(cinemetaUrl);
+      var meta = cinemetaData && cinemetaData.meta ? cinemetaData.meta : null;
+
+      if (meta) {
+        if (meta.moviedb_id && !result.tmdbId) {
+          result.tmdbId = String(meta.moviedb_id);
+        }
+        result.title = meta.name || null;
+        result.originalTitle = meta.name || null;
+        if (meta.year) {
+          result.year = parseInt(String(meta.year).slice(0, 4), 10);
+        } else if (meta.releaseInfo) {
+          result.year = parseInt(String(meta.releaseInfo).slice(0, 4), 10);
+        }
+
+        if (type === 'series' && Array.isArray(meta.videos) && parsedId.season && parsedId.episode) {
+          var regularVideos = meta.videos
+            .filter(function (v) { return Number(v.season) > 0 && Number(v.episode || v.number) > 0; })
+            .sort(function (a, b) {
+              if (Number(a.season) !== Number(b.season)) return Number(a.season) - Number(b.season);
+              return Number(a.episode || a.number) - Number(b.episode || b.number);
+            });
+
+          var absCount = 0;
+          for (var i = 0; i < regularVideos.length; i++) {
+            var v = regularVideos[i];
+            absCount++;
+            var epNum = Number(v.episode || v.number);
+            if (Number(v.season) === parsedId.season && epNum === parsedId.episode) {
+              result.absoluteEpisode = absCount;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    var tmdbApiKey = process.env.TMDB_API_KEY;
+    if (tmdbApiKey) {
+      if (!result.tmdbId && result.imdbId) {
+        var findUrl = TMDB_API_BASE + '/find/' + result.imdbId + '?api_key=' + tmdbApiKey + '&external_source=imdb_id&language=vi-VN';
+        var findData = await fetchJson(findUrl);
+        if (findData) {
+          var matchList = tmdbType === 'tv'
+            ? ((findData.tv_results && findData.tv_results.length) ? findData.tv_results : findData.movie_results)
+            : ((findData.movie_results && findData.movie_results.length) ? findData.movie_results : findData.tv_results);
+
+          if (matchList && matchList.length > 0) {
+            var item = matchList[0];
+            result.tmdbId = String(item.id);
+            result.title = item.title || item.name || result.title;
+            result.originalTitle = item.original_title || item.original_name || result.originalTitle;
+            var dateStr = item.release_date || item.first_air_date;
+            if (dateStr) result.year = parseInt(dateStr.slice(0, 4), 10);
+          }
+        }
+      } else if (result.tmdbId && !result.originalTitle) {
+        var detailUrl = TMDB_API_BASE + '/' + tmdbType + '/' + result.tmdbId + '?api_key=' + tmdbApiKey + '&language=vi-VN';
+        var detailData = await fetchJson(detailUrl);
+        if (detailData) {
+          result.title = detailData.title || detailData.name || result.title;
+          result.originalTitle = detailData.original_title || detailData.original_name || result.originalTitle;
+          var dStr = detailData.release_date || detailData.first_air_date;
+          if (dStr) result.year = parseInt(dStr.slice(0, 4), 10);
+        }
+      }
+    }
+
+    return result;
+  }
+
+  function normalizeText(str) {
+    return String(str || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function toSlug(str) {
+    return normalizeText(str).replace(/\s+/g, '-');
+  }
+
+  function cleanTitleForMatch(rawTitle, yearToStrip) {
+    var cleaned = String(rawTitle || '')
+      .replace(/[\(\[\{]\s*(?:19|20)\d{2}\s*[\)\]\}]/g, ' ')
+      .replace(/[\(\[\{]\s*(?:phần|phan|season|ss|mùa|mua|part)\s*\d+\s*[\)\]\}]/gi, ' ');
+
+    var norm = normalizeText(cleaned)
+      .replace(/\b(?:phan|season|ss|mua|part)\s*0*\d+\b/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (yearToStrip) {
+      var yearRegex = new RegExp('\\b' + yearToStrip + '$');
+      var stripped = norm.replace(yearRegex, '').trim();
+      if (stripped.length > 0) {
+        norm = stripped;
+      }
+    }
+
+    return norm;
+  }
+
+  function extractYearFromItem(item) {
+    if (item && item.year && !Number.isNaN(parseInt(item.year, 10))) {
+      return parseInt(item.year, 10);
+    }
+    var combined = ((item && item.name) || '') + ' ' + ((item && item.origin_name) || '') + ' ' + ((item && item.slug) || '');
+    var match = combined.match(/(?:[\(\[\-\s])((?:19|20)\d{2})(?:[\)\]\s]|$)/);
+    if (match && match[1]) {
+      return parseInt(match[1], 10);
+    }
+    return null;
+  }
+
+  function extractSeasonFromTitleOrSlug(name, originName, slug) {
+    var combined = normalizeText(name) + ' | ' + normalizeText(originName) + ' | ' + String(slug || '').toLowerCase();
+    var patterns = [
+      /\b(?:phan|season|ss|mua)\s*0*(\d+)\b/i,
+      /\bs0*(\d+)\b/i,
+      /-phan-0*(\d+)\b/i,
+      /-season-0*(\d+)\b/i
+    ];
+    for (var i = 0; i < patterns.length; i++) {
+      var match = combined.match(patterns[i]);
+      if (match && match[1]) {
+        return parseInt(match[1], 10);
+      }
+    }
+    return null;
+  }
+
+  function isSeasonMatch(movieObj, targetSeason) {
+    if (!targetSeason) return true;
+
+    var rawTmdbSeason = movieObj && movieObj.tmdb ? movieObj.tmdb.season : null;
+    var tmdbSeason = rawTmdbSeason !== null && rawTmdbSeason !== undefined
+      ? parseInt(rawTmdbSeason, 10)
+      : null;
+
+    if (tmdbSeason !== null && !Number.isNaN(tmdbSeason)) {
+      return tmdbSeason === targetSeason;
+    }
+
+    var detectedSeason = extractSeasonFromTitleOrSlug(
+      movieObj ? movieObj.name : '',
+      movieObj ? movieObj.origin_name : '',
+      movieObj ? movieObj.slug : ''
+    );
+
+    if (detectedSeason !== null) {
+      return detectedSeason === targetSeason;
+    }
+
+    return targetSeason === 1;
+  }
+
+  function isTypeCompatible(movieObj, requestedType) {
+    if (!movieObj) return false;
+    var kkTmdbType = movieObj.tmdb ? movieObj.tmdb.type : null;
+    var kkType = movieObj.type;
+
+    if (requestedType === 'movie') {
+      if (kkTmdbType === 'movie') return true;
+      if (kkType === 'single' || kkType === 'chieurap') return true;
+      if (kkType === 'hoathinh' && (!movieObj.tmdb || !movieObj.tmdb.season)) return true;
+      return false;
+    }
+
+    if (requestedType === 'series') {
+      if (kkTmdbType === 'tv') return true;
+      if (kkType === 'series' || kkType === 'tvshows' || kkType === 'hoathinh') return true;
+      return false;
+    }
+
+    return true;
+  }
+
+  function isTitleAndYearMatch(item, meta, requestedType, targetSeason) {
+    if (!isTypeCompatible(item, requestedType)) return false;
+
+    var itemYear = extractYearFromItem(item);
+    var refYear = meta.year || itemYear;
+
+    var targetTitles = [
+      cleanTitleForMatch(meta.originalTitle, refYear),
+      cleanTitleForMatch(meta.title, refYear)
+    ].filter(Boolean);
+
+    if (targetTitles.length === 0) return false;
+
+    var itemTitles = [
+      cleanTitleForMatch(item.origin_name, refYear),
+      cleanTitleForMatch(item.name, refYear)
+    ].filter(Boolean);
+
+    var isExactTitle = itemTitles.some(function (t) { return targetTitles.includes(t); });
+    if (!isExactTitle) return false;
+
+    if (requestedType === 'movie') {
+      if (meta.year && itemYear && Math.abs(itemYear - meta.year) > 1) {
+        return false;
+      }
+      return true;
+    }
+
+    return isSeasonMatch(item, targetSeason);
+  }
+
+  function extractMoviePayload(apiResponse) {
+    if (!apiResponse) return null;
+    if (apiResponse.movie && Array.isArray(apiResponse.episodes)) {
+      return { movie: apiResponse.movie, episodes: apiResponse.episodes };
+    }
+    if (apiResponse.data && apiResponse.data.item) {
+      return {
+        movie: apiResponse.data.item,
+        episodes: apiResponse.data.item.episodes || apiResponse.episodes || []
+      };
+    }
+    return null;
+  }
+
+  async function findKKPhimMovieData(type, parsedId, meta) {
+    var targetSeason = parsedId.season;
+    var candidateSlugs = new Set();
+    var fallbackSingleSeasonPayload = null;
+
+    if (meta.tmdbId) {
+      var directUrl = KKPHIM_BASE + '/tmdb/' + meta.tmdbType + '/' + meta.tmdbId;
+      var directRes = await fetchJson(directUrl);
+
+      if (directRes) {
+        var payload = extractMoviePayload(directRes);
+        if (payload && isTypeCompatible(payload.movie, type)) {
+          if (type === 'movie' || isSeasonMatch(payload.movie, targetSeason)) {
+            if (payload.episodes && payload.episodes.length > 0) {
+              return payload;
+            }
+            if (payload.movie && payload.movie.slug) candidateSlugs.add(payload.movie.slug);
+          } else if (type === 'series' && targetSeason > 1) {
+            if (!meta.originalTitle && payload.movie && payload.movie.origin_name) {
+              meta.originalTitle = payload.movie.origin_name;
+            }
+            if (!meta.title && payload.movie && payload.movie.name) {
+              meta.title = payload.movie.name;
+            }
+            fallbackSingleSeasonPayload = payload;
+          }
+        }
+
+        var listItems = directRes.items || (directRes.data && directRes.data.items) || (Array.isArray(directRes.data) ? directRes.data : null);
+        if (Array.isArray(listItems)) {
+          for (var i = 0; i < listItems.length; i++) {
+            var listItem = listItems[i];
+            if (isTypeCompatible(listItem, type) && (type === 'movie' || isSeasonMatch(listItem, targetSeason))) {
+              if (listItem.slug) candidateSlugs.add(listItem.slug);
+            }
+          }
+        }
+      }
+    }
+
+    if (candidateSlugs.size === 0 && meta.imdbId) {
+      var imdbUrl = KKPHIM_BASE + '/imdb/title/' + meta.imdbId;
+      var imdbRes = await fetchJson(imdbUrl);
+      var imdbPayload = extractMoviePayload(imdbRes);
+      if (imdbPayload && isTypeCompatible(imdbPayload.movie, type)) {
+        if (type === 'movie' || isSeasonMatch(imdbPayload.movie, targetSeason)) {
+          if (imdbPayload.episodes && imdbPayload.episodes.length > 0) {
+            return imdbPayload;
+          }
+          if (imdbPayload.movie && imdbPayload.movie.slug) candidateSlugs.add(imdbPayload.movie.slug);
+        } else if (type === 'series' && targetSeason > 1) {
+          if (!meta.originalTitle && imdbPayload.movie && imdbPayload.movie.origin_name) {
+            meta.originalTitle = imdbPayload.movie.origin_name;
+          }
+          fallbackSingleSeasonPayload = fallbackSingleSeasonPayload || imdbPayload;
+        }
+      }
+    }
+
+    if (candidateSlugs.size === 0) {
+      var searchKeywords = [];
+      var baseOrigin = meta.originalTitle
+        ? meta.originalTitle.replace(/\s*\((?:Phần|Season|\d{4})\s*\d*\)/gi, '').trim()
+        : '';
+      var baseTitle = (meta.title && meta.title !== meta.originalTitle)
+        ? meta.title.replace(/\s*\((?:Phần|Season|\d{4})\s*\d*\)/gi, '').trim()
+        : '';
+
+      if (type === 'movie' && baseOrigin && meta.year && baseOrigin.length <= 12) {
+        searchKeywords.push(baseOrigin + ' ' + meta.year);
+      }
+      if (baseOrigin) searchKeywords.push(baseOrigin);
+      if (baseTitle) searchKeywords.push(baseTitle);
+      if (type === 'movie' && baseOrigin && meta.year && baseOrigin.length > 12) {
+        searchKeywords.push(baseOrigin + ' ' + meta.year);
+      }
+
+      for (var k = 0; k < searchKeywords.length; k++) {
+        var kw = searchKeywords[k];
+        if (!kw) continue;
+        var searchUrl = KKPHIM_BASE + '/v1/api/tim-kiem?keyword=' + encodeURIComponent(kw) + '&limit=32';
+        var searchRes = await fetchJson(searchUrl);
+        var items = (searchRes && searchRes.data && searchRes.data.items) || (searchRes && searchRes.items) || [];
+
+        if (!Array.isArray(items) || items.length === 0) continue;
+
+        for (var j = 0; j < items.length; j++) {
+          var item = items[j];
+          var itemTmdbId = (item && item.tmdb && item.tmdb.id) ? String(item.tmdb.id) : null;
+          if (meta.tmdbId && itemTmdbId === String(meta.tmdbId)) {
+            if (type === 'movie' || isSeasonMatch(item, targetSeason)) {
+              if (item.slug) candidateSlugs.add(item.slug);
+            } else if (type === 'series' && !fallbackSingleSeasonPayload && item.slug) {
+              var detailRes = await fetchJson(KKPHIM_BASE + '/phim/' + item.slug);
+              fallbackSingleSeasonPayload = extractMoviePayload(detailRes);
+            }
+          }
+        }
+
+        if (candidateSlugs.size > 0) break;
+
+        for (var mIdx = 0; mIdx < items.length; mIdx++) {
+          var candidate = items[mIdx];
+          if (isTitleAndYearMatch(candidate, meta, type, targetSeason)) {
+            if (candidate.slug) candidateSlugs.add(candidate.slug);
+          }
+        }
+
+        if (candidateSlugs.size > 0) break;
+      }
+    }
+
+    if (candidateSlugs.size === 0 && (meta.originalTitle || meta.title)) {
+      var baseSlug = toSlug(cleanTitleForMatch(meta.originalTitle || meta.title, meta.year));
+      var directSlugsToTry = [];
+
+      if (baseSlug) {
+        if (type === 'movie') {
+          if (meta.year) directSlugsToTry.push(baseSlug + '-' + meta.year);
+          directSlugsToTry.push(baseSlug);
+        } else if (type === 'series') {
+          if (targetSeason && targetSeason > 1) {
+            directSlugsToTry.push(baseSlug + '-phan-' + targetSeason);
+            directSlugsToTry.push(baseSlug + '-season-' + targetSeason);
+          }
+          directSlugsToTry.push(baseSlug);
+        }
+      }
+
+      for (var sIdx = 0; sIdx < directSlugsToTry.length; sIdx++) {
+        var testSlug = directSlugsToTry[sIdx];
+        var directDetailRes = await fetchJson(KKPHIM_BASE + '/phim/' + testSlug);
+        var directPayload = extractMoviePayload(directDetailRes);
+        if (directPayload && directPayload.movie && Array.isArray(directPayload.episodes) && directPayload.episodes.length > 0) {
+          var m = directPayload.movie;
+          var tmdbMatched = meta.tmdbId && m.tmdb && m.tmdb.id && String(m.tmdb.id) === String(meta.tmdbId);
+          if (tmdbMatched || isTitleAndYearMatch(m, meta, type, targetSeason)) {
+            return directPayload;
+          }
+        }
+      }
+    }
+
+    var slugArray = Array.from(candidateSlugs);
+    for (var cIdx = 0; cIdx < slugArray.length; cIdx++) {
+      var slug = slugArray[cIdx];
+      var slugDetailRes = await fetchJson(KKPHIM_BASE + '/phim/' + slug);
+      var slugPayload = extractMoviePayload(slugDetailRes);
+      if (slugPayload && Array.isArray(slugPayload.episodes) && slugPayload.episodes.length > 0) {
+        return slugPayload;
+      }
+    }
+
+    if (type === 'series' && fallbackSingleSeasonPayload && meta.absoluteEpisode) {
+      return {
+        movie: fallbackSingleSeasonPayload.movie,
+        episodes: fallbackSingleSeasonPayload.episodes,
+        useAbsoluteEpisode: true
+      };
+    }
+
+    return null;
+  }
+
+  function findMatchingEpisodeItem(serverData, targetEpisode, absoluteEpisode, isMovie) {
+    if (!Array.isArray(serverData) || serverData.length === 0) return null;
+
+    if (isMovie) {
+      var fullMatch = serverData.find(function (ep) {
+        var s = String(ep.slug || '').toLowerCase();
+        var n = String(ep.name || '').toLowerCase();
+        return s === 'full' || n === 'full' || s === 'hd' || n === 'hd' || s === 'fhd' || n === 'fhd' || s === '1' || s === 'tap-1' || s === 'tap-01';
+      });
+      return fullMatch || serverData[0];
+    }
+
+    var extractEpNumbers = function (ep) {
+      var numbers = [];
+      var slug = String(ep.slug || '').toLowerCase().trim();
+      var name = String(ep.name || '').toLowerCase().trim();
+
+      var slugMatch = slug.match(/^(?:tap-|ep-|episode-|t-)?0*(\d+)(?:[-_][a-z]+)?$/i);
+      if (slugMatch) numbers.push(parseInt(slugMatch[1], 10));
+
+      var nameMatch = name.match(/(?:tập|tap|ep|episode|^)\s*0*(\d+)(?:\b|$)/i);
+      if (nameMatch) numbers.push(parseInt(nameMatch[1], 10));
+
+      return numbers;
+    };
+
+    if (targetEpisode !== null && targetEpisode !== undefined) {
+      for (var i = 0; i < serverData.length; i++) {
+        var ep = serverData[i];
+        var epNums = extractEpNumbers(ep);
+        if (epNums.includes(Number(targetEpisode))) {
+          return ep;
+        }
+      }
+    }
+
+    if (absoluteEpisode !== null && absoluteEpisode !== undefined) {
+      for (var j = 0; j < serverData.length; j++) {
+        var absEp = serverData[j];
+        var absNums = extractEpNumbers(absEp);
+        if (absNums.includes(Number(absoluteEpisode))) {
+          return absEp;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  function classifyAudioType(serverName) {
+    var norm = normalizeText(serverName);
+
+    if (norm.inAudioType(serverName) {
     const norm = normalizeText(serverName);
 
     if (norm.includes('long tieng') || norm.includes('longtieng')) {
